@@ -1,0 +1,354 @@
+(function () {
+    const AgiDiscussionViewer = {
+        name: 'AgiDiscussionViewer',
+        props: {
+            payload: { type: Object, default: () => ({}) }
+        },
+        emits: ['module-action', 'advance-to-plan', 'pin-to-directives'],
+        data() {
+            return {
+                selectedTextSnippet: '',
+                selectedSourceMessageId: null,
+                showSelectionPinBar: false,
+            };
+        },
+        computed: {
+            // Normalize payload whether fields sit at root or inside architectureSummary/planDetails
+            d() {
+                let base = this.payload || {};
+
+                // If nested inside architectureSummary as an object or JSON string
+                if (base.architectureSummary) {
+                    if (typeof base.architectureSummary === 'object') {
+                        base = Object.assign({}, base, base.architectureSummary);
+                    } else if (typeof base.architectureSummary === 'string' && base.architectureSummary.trim().startsWith('{')) {
+                        try {
+                            const parsed = JSON.parse(base.architectureSummary);
+                            base = Object.assign({}, base, parsed);
+                        } catch (e) { }
+                    }
+                }
+
+                // If nested inside planDetails or payload
+                if (base.planDetails && typeof base.planDetails === 'object') {
+                    base = Object.assign({}, base, base.planDetails);
+                }
+                if (base.payload && typeof base.payload === 'object') {
+                    base = Object.assign({}, base, base.payload);
+                }
+
+                return {
+                    messageId: base.messageId || base.assistantMessageId || null,
+                    discussionId: base.discussionId || null,
+                    scopeMaturity: base.scopeMaturity || 'EXPLORATORY',
+                    readyToOrchestrate: Boolean(base.readyToOrchestrate),
+                    replyMessage: base.replyMessage || base.message || '',
+                    proposedModules: Array.isArray(base.proposedModules) ? base.proposedModules : [],
+                    clarifyingQuestions: Array.isArray(base.clarifyingQuestions) ? base.clarifyingQuestions : [],
+                    architecturalConsiderations: Array.isArray(base.architecturalConsiderations) ? base.architecturalConsiderations : [],
+                    targetArtifactUri: base.targetArtifactUri || base.createdArtifactUri || ''
+                };
+            },
+            dynamicTargetArtifact() {
+                return this.d.targetArtifactUri || 'Active Workspace Scope';
+            },
+            dynamicPlanButtonLabel() {
+                const art = (this.d.targetArtifactUri || '').toLowerCase();
+                if (art.endsWith('.xml')) {
+                    return this.d.proposedModules.length > 0
+                        ? 'Advance to Plan: Screen & Navigation'
+                        : 'Advance to Plan: Screen Architecture';
+                }
+                if (art.endsWith('.groovy') || art.includes('/service/')) {
+                    return 'Advance to Plan: Service Logic';
+                }
+                if (art.includes('/entity/')) {
+                    return 'Advance to Plan: Data Model & Entities';
+                }
+                return 'Advance to Plan: Formulate Specification';
+            }
+        },
+        methods: {
+            formatMarkdown(text) {
+                if (!text) return '<span class="text-slate-500 italic">No message recorded.</span>';
+                if (window.showdown && typeof window.showdown.Converter === 'function') {
+                    const converter = new window.showdown.Converter({ tables: true, simplifiedAutoLink: true });
+                    return converter.makeHtml(text);
+                }
+                return text.replace(/\n/g, '<br/>');
+            },
+            handleAdvanceToPlan() {
+                this.$emit('advance-to-plan', {
+                    sourcePayload: this.payload,
+                    normalized: this.d,
+                    targetArtifactUri: this.d.targetArtifactUri
+                });
+            },
+            // Listen for user text selection inside the narrative text
+            handleTextSelection() {
+                const selection = window.getSelection();
+                const text = selection ? selection.toString().trim() : '';
+                if (text && text.length > 4) {
+                    this.selectedTextSnippet = text;
+                    this.selectedSourceMessageId = this.d.messageId;
+                    this.showSelectionPinBar = true;
+                } else {
+                    this.showSelectionPinBar = false;
+                }
+            },
+
+            // Broadcasts directly to AgiWorkspace across any component nesting depth
+            dispatchPinPayload(payloadData) {
+                // 1. Fire on the BroadcastChannel (caught directly by AgiWorkspace)
+                try {
+                    const bus = new BroadcastChannel('agi-ide-context-bus');
+                    bus.postMessage(Object.assign({ event: 'pin-turn-to-directives' }, payloadData));
+                    bus.close();
+                } catch (e) {
+                    console.warn("Could not post to agi-ide-context-bus:", e);
+                }
+
+                // 2. Also emit locally for immediate parent listeners
+                this.$emit('pin-to-directives', payloadData);
+            },
+
+            // 1. Full Narrative Response Pin
+            pinFullMessage() {
+                const targetDiscId = this.d.discussionId
+                    || this.activeDiscussionId
+                    || (window.useAgiIdeStore ? window.useAgiIdeStore().activeDiscussionId : '');
+                const mId = this.d.messageId ? `Turn #${this.d.messageId}` : 'Discussion Turn';
+                const targetComp = this.d.targetArtifactUri ? ` (${this.d.targetArtifactUri})` : '';
+
+                this.dispatchPinPayload({
+                    discussionId: targetDiscId,
+                    messageId: this.d.messageId,
+                    title: `Architecture Consensus from ${mId}${targetComp}`,
+                    content: this.d.replyMessage
+                });
+            },
+
+            // 2. Highlighted Snippet Pin with Source Provenance
+            pinSelectedSnippet() {
+                if (!this.selectedTextSnippet) return;
+                const targetDiscId = this.d.discussionId
+                    || this.activeDiscussionId
+                    || (window.useAgiIdeStore ? window.useAgiIdeStore().activeDiscussionId : '');
+                const mId = this.d.messageId ? `Turn #${this.d.messageId}` : 'Discussion Excerpt';
+                const artifact = this.d.targetArtifactUri ? ` | \`${this.d.targetArtifactUri}\`` : '';
+                const time = new Date().toLocaleTimeString();
+
+                const formattedSnippet =
+                    `> 📌 **Excerpt from ${mId} [Assistant (${time})]${artifact}**:
+> ${this.selectedTextSnippet.split('\n').join('\n> ')}`;
+
+                this.dispatchPinPayload({
+                    discussionId: targetDiscId,
+                    messageId: this.d.messageId,
+                    title: `Directives Excerpt from ${mId}`,
+                    content: formattedSnippet
+                });
+
+                // Clear selection state
+                this.selectedTextSnippet = '';
+                this.showSelectionPinBar = false;
+                window.getSelection()?.removeAllRanges();
+            },
+        },
+        template: `
+            <div class="agi-discussion-viewer column q-gutter-y-md font-mono text-white">
+                
+                <!-- 1. MATURITY & READINESS STATUS STRIP -->
+                <div class="row items-center justify-between q-pa-sm rounded-borders" style="background-color: #0f172a; border: 1px solid #1e293b;">
+                    <div class="row items-center q-gutter-x-sm">
+                        <span class="text-caption font-bold text-slate-400" style="font-size: 11px;">SCOPE MATURITY:</span>
+                        <q-badge color="deep-purple-9" text-color="white" class="font-mono text-weight-bold" style="font-size: 10px;">
+                            {{ d.scopeMaturity }}
+                        </q-badge>
+                    </div>
+                    <div class="row items-center q-gutter-x-sm">
+                        <span class="text-caption text-slate-400 font-bold" style="font-size: 11px;">READY TO ORCHESTRATE:</span>
+                        <q-badge :color="d.readyToOrchestrate ? 'teal-9' : 'amber-9'" text-color="white" class="font-mono text-weight-bold" style="font-size: 10px;">
+                            {{ d.readyToOrchestrate ? 'YES' : 'IN REFINEMENT' }}
+                        </q-badge>
+                    </div>
+                </div>
+
+                <!-- 2. NARRATIVE / ANALYSIS (MARKDOWN) WITH PINNING ACTIONS -->
+                <div 
+                    v-if="d.replyMessage" 
+                    class="q-pa-md rounded-borders column q-gutter-y-xs relative-position" 
+                    style="background-color: #0b1329; border: 1px solid #1e3a5f;"
+                >
+                    <!-- Header with Full Pin Button -->
+                    <div class="row items-center justify-between border-bottom-dark q-pb-xs q-mb-xs" style="border-bottom: 1px solid #1e293b;">
+                        <div class="row items-center q-gutter-x-xs text-caption text-slate-400">
+                            <q-icon name="smart_toy" size="14px" color="cyan-4" />
+                            <span class="text-weight-bold text-slate-300">ASSISTANT ARCHITECTURE RESPONSE</span>
+                            <span v-if="d.messageId" class="text-slate-500 font-mono">(Turn #{{ d.messageId }})</span>
+                        </div>
+                        <q-btn 
+                            flat dense no-caps size="xs"
+                            color="cyan-3"
+                            icon="push_pin"
+                            label="Add Full Response to Directives"
+                            class="bg-slate-900 q-px-sm rounded-borders font-mono"
+                            style="border: 1px solid #0284c7; font-size: 10.5px;"
+                            @click="pinFullMessage"
+                        >
+                            <q-tooltip>Append this response consensus to component.md &amp; working buffer</q-tooltip>
+                        </q-btn>
+                    </div>
+
+                    <!-- Highlightable Text Container -->
+                    <div 
+                        class="markdown-body font-mono text-caption text-slate-200 select-text-enabled" 
+                        style="line-height: 1.6; user-select: text;" 
+                        @mouseup="handleTextSelection"
+                        v-html="formatMarkdown(d.replyMessage)"
+                    ></div>
+
+                    <!-- Floating Selection Banner (Appears when text is highlighted) -->
+                    <q-slide-transition>
+                        <div 
+                            v-if="showSelectionPinBar && selectedTextSnippet" 
+                            class="row items-center justify-between q-mt-sm q-pa-xs bg-slate-950 rounded-borders shadow-8"
+                            style="border: 1px solid #38bdf8; z-index: 20;"
+                        >
+                            <div class="row items-center q-gutter-x-xs ellipsis text-cyan-3" style="max-width: 60%;">
+                                <q-icon name="content_cut" size="13px" />
+                                <span class="ellipsis" style="font-size: 11px;">"{{ selectedTextSnippet.substring(0, 50) }}..."</span>
+                            </div>
+                            <div class="row items-center q-gutter-x-xs">
+                                <q-btn 
+                                    dense flat no-caps size="xs" 
+                                    color="white" 
+                                    class="bg-cyan-9 text-weight-bold q-px-sm rounded-borders font-mono"
+                                    icon="push_pin"
+                                    label="Paste Excerpt to Directives" 
+                                    @click="pinSelectedSnippet" 
+                                />
+                                <q-btn dense round flat size="xs" icon="close" color="grey-5" @click="showSelectionPinBar = false" />
+                            </div>
+                        </div>
+                    </q-slide-transition>
+                </div>
+
+                <!-- 3. PROPOSED MODULES (DYNAMIC SCOPE BREAKDOWN) -->
+                <div v-if="d.proposedModules.length > 0" class="column q-gutter-y-sm">
+                    <div class="row items-center justify-between">
+                        <span class="text-caption font-bold text-cyan-3" style="font-size: 12px;">
+                            PROPOSED CORE PILLARS &amp; ARCHITECTURAL MODULES ({{ d.proposedModules.length }})
+                        </span>
+                        <span class="text-caption font-mono text-slate-400 ellipsis" style="font-size: 10px; max-width: 50%;">
+                            Target: {{ dynamicTargetArtifact }}
+                        </span>
+                    </div>
+
+                    <div class="column q-gutter-y-xs">
+                        <div 
+                            v-for="(mod, mIdx) in d.proposedModules" 
+                            :key="mod.key || mIdx" 
+                            class="q-pa-md rounded-borders column q-gutter-y-xs" 
+                            style="background-color: #0f172a; border: 1px solid #334155;"
+                        >
+                            <div class="row items-center justify-between">
+                                <div class="row items-center q-gutter-x-sm">
+                                    <div class="row items-center justify-center font-bold text-white rounded bg-cyan-9" style="width: 22px; height: 22px; font-size: 11px;">
+                                        {{ mIdx + 1 }}
+                                    </div>
+                                    <span class="text-weight-bold text-white font-mono" style="font-size: 12px;">{{ mod.title }}</span>
+                                    <q-badge v-if="mod.key" color="slate-900" text-color="cyan-3" class="font-mono text-caption" style="border: 1px solid #0284c7;">
+                                        {{ mod.key }}
+                                    </q-badge>
+                                </div>
+                                <span v-if="mod.suggestedArchetype" class="text-caption font-mono text-amber-3 text-weight-bold" style="font-size: 11px;">
+                                    Archetype: {{ mod.suggestedArchetype }}
+                                </span>
+                            </div>
+                            <div class="text-caption text-slate-300 font-mono q-mt-xs" style="font-size: 11px; line-height: 1.5;">
+                                {{ mod.description }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. CLARIFYING QUESTIONS CALLOUT -->
+                <div v-if="d.clarifyingQuestions.length > 0" class="column q-gutter-y-xs q-pa-md rounded-borders" style="background-color: #1a1528; border: 1px solid #7c3aed;">
+                    <div class="row items-center q-gutter-x-xs text-purple-3 font-bold text-caption" style="font-size: 11px;">
+                        <q-icon name="psychology" size="16px" />
+                        <span>CLARIFYING QUESTIONS FOR REFINEMENT:</span>
+                    </div>
+                    <div class="column q-gutter-y-xs q-mt-xs">
+                        <div v-for="(q, qIdx) in d.clarifyingQuestions" :key="qIdx" class="row items-start no-wrap q-gutter-x-sm text-caption text-slate-200 font-mono" style="font-size: 11px; line-height: 1.5;">
+                            <q-icon name="arrow_right" size="16px" color="purple-4" class="q-mt-xs" />
+                            <span>{{ q }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. ARCHITECTURAL & COMPLIANCE CONSIDERATIONS -->
+                <div v-if="d.architecturalConsiderations.length > 0" class="column q-gutter-y-xs q-pa-md rounded-borders" style="background-color: #0f172a; border: 1px solid #1e293b;">
+                    <div class="row items-center q-gutter-x-xs text-cyan-3 font-bold text-caption" style="font-size: 11px;">
+                        <q-icon name="verified_user" size="16px" />
+                        <span>ARCHITECTURAL &amp; COMPLIANCE CONSIDERATIONS:</span>
+                    </div>
+                    <div class="column q-gutter-y-xs q-mt-xs">
+                        <div v-for="(c, cIdx) in d.architecturalConsiderations" :key="cIdx" class="row items-start no-wrap q-gutter-x-sm text-caption text-slate-300 font-mono" style="font-size: 11px; line-height: 1.5;">
+                            <q-icon name="check" size="14px" color="cyan-4" class="q-mt-xs" />
+                            <span>{{ c }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. DYNAMIC STANCE TRANSITION CALLOUT (DISCUSS -> PLAN) -->
+                <div 
+                    class="row items-center justify-between q-pa-md q-mt-sm rounded-borders" 
+                    style="background-color: #0d1117; border: 1px solid #7c3aed;"
+                >
+                    <div class="col-grow q-mr-md">
+                        <div class="row items-center q-gutter-x-xs q-mb-xs">
+                            <q-badge color="deep-purple-8" text-color="white" class="font-mono text-caption" style="font-size: 9px;">
+                                {{ d.scopeMaturity }}
+                            </q-badge>
+                            <span class="text-caption font-mono text-slate-300 ellipsis" style="font-size: 11px;">
+                                Scope Target: <strong class="text-purple-2">{{ dynamicTargetArtifact }}</strong>
+                            </span>
+                        </div>
+                        <div class="text-caption text-slate-400 font-mono" style="font-size: 10px; line-height: 1.4;">
+                            Promote agreed architectural invariants and module requirements into canonical Moqui specification planning.
+                        </div>
+                    </div>
+
+                    <q-btn 
+                        color="deep-purple-7" 
+                        text-color="white"
+                        icon="architecture" 
+                        :label="dynamicPlanButtonLabel" 
+                        no-caps 
+                        dense
+                        class="text-weight-bold font-mono q-px-md q-py-xs"
+                        style="height: 32px; font-size: 11px;"
+                        @click="handleAdvanceToPlan"
+                    >
+                        <q-tooltip>Fork successor step with stance PLAN and synthesized contract ingress</q-tooltip>
+                    </q-btn>
+                </div>
+
+            </div>
+        `
+    };
+
+    window.AgiDiscussionViewer = AgiDiscussionViewer;
+    if (!window.AgiComponents) window.AgiComponents = {};
+    window.AgiComponents['agi-discussion-viewer'] = AgiDiscussionViewer;
+
+    const registerComp = () => {
+        if (window.moqui && window.moqui.webrootVueApp) {
+            window.moqui.webrootVueApp.component('agi-discussion-viewer', AgiDiscussionViewer);
+        } else {
+            setTimeout(registerComp, 50);
+        }
+    };
+    registerComp();
+})();

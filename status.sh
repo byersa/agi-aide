@@ -1,0 +1,10 @@
+git add 	MoquiConf.xml
+git add 	component.xml
+git add 	data/
+git add 	entity/
+git add 	prompt/
+git add 	screen/
+git add 	script/
+git add 	service/
+git add 	status.sh
+git add 	test/

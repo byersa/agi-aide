@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd"
+        default-menu-title="Pipeline Studio" default-menu-index="1" render-modes="qvue">
+
+    <widgets>
+        <render-mode>
+            <text type="qvue" location="component://agi-aide/screen/AgiAide/Studio.qvue" template="false"/>
+        </render-mode>
+    </widgets>
+</screen>

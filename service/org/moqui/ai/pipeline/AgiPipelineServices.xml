@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <service verb="get" noun="PipelineGraph" type="script" location="component://agi-aide/script/AgiPipelineServices.js" method="getPipelineGraph" authenticate="anonymous-all">
+        <in-parameters>
+            <parameter name="targetComponent"/>
+            <parameter name="discussionId"/>
+            <parameter name="includeArchived" default-value="N"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="initiatives" type="List"/>
+            <parameter name="pipelineNodes" type="List"/>
+            <parameter name="pipelineEdges" type="List"/>
+        </out-parameters>
+    </service>
+
+    <service verb="create" noun="Discussion" type="script" location="component://agi-aide/script/AgiPipelineServices.js" method="createDiscussion" authenticate="anonymous-all">
+        <in-parameters>
+            <parameter name="name" required="true"/>
+            <parameter name="shortName"/>
+            <parameter name="targetComponent"/>
+            <parameter name="targetArtifactUri"/>
+            <parameter name="discussionCategoryEnumId" default-value="AitCategoryInstance"/>
+            <parameter name="discussionTypeEnumId" default-value="AitDiscElicitation"/>
+            <parameter name="facets" type="Map"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="discussionId"/>
+        </out-parameters>
+    </service>
+
+    <service verb="update" noun="DiscussionTitle" type="script" location="component://agi-aide/script/AgiPipelineServices.js" method="updateDiscussionTitle" authenticate="anonymous-all">
+        <in-parameters>
+            <parameter name="discussionId" required="true"/>
+            <parameter name="name" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="discussionId"/>
+            <parameter name="name"/>
+            <parameter name="shortName"/>
+        </out-parameters>
+    </service>
+
+    <service verb="delete" noun="Discussion" type="script" location="component://agi-aide/script/AgiPipelineServices.js" method="deleteDiscussion" authenticate="anonymous-all">
+        <in-parameters>
+            <parameter name="discussionId" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="message"/>
+        </out-parameters>
+    </service>
+
+    <service verb="get" noun="Payload" type="script" location="component://agi-aide/script/AgiPipelineServices.js" method="getPayload" authenticate="anonymous-all">
+        <in-parameters>
+            <parameter name="agiPayloadId" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="payloadDetails" type="Map"/>
+        </out-parameters>
+    </service>
+
+    <service verb="process" noun="Payload" type="script" location="component://agi-aide/script/AgiPipelineServices.js" method="processPayload" authenticate="anonymous-all">
+        <in-parameters>
+            <parameter name="agiPayloadId"/>
+            <parameter name="mode" default-value="plan"/>
+            <parameter name="targetComponent"/>
+            <parameter name="artifactUri"/>
+            <parameter name="title"/>
+            <parameter name="userPromptText" allow-html="any"/>
+            <parameter name="payload" type="Map"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="agiPayloadId"/>
+            <parameter name="statusId"/>
+        </out-parameters>
+    </service>
+
+    <service verb="fork" noun="PipelineStep" type="script" location="component://agi-aide/script/AgiPipelineServices.js" method="forkPipelineStep" authenticate="anonymous-all">
+        <in-parameters>
+            <parameter name="discussionId"/>
+            <parameter name="sourceStepId"/>
+            <parameter name="directivePrompt" allow-html="any"/>
+            <parameter name="modifiedPayloadJson" allow-html="any"/>
+            <parameter name="stanceEnumId"/>
+            <parameter name="targetStanceEnumId"/>
+            <parameter name="ingressPayloadId"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="newStepId"/>
+            <parameter name="ingressPayloadId"/>
+            <parameter name="statusId"/>
+        </out-parameters>
+    </service>
+
+    <service verb="archive" noun="PipelineBranch" type="script" location="component://agi-aide/script/AgiPipelineServices.js" method="archivePipelineBranch" authenticate="anonymous-all">
+        <in-parameters>
+            <parameter name="pipelineStepId" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="archivedCount" type="Integer"/>
+        </out-parameters>
+    </service>
+
+    <service verb="orchestrate" noun="Module" type="script" location="component://agi-aide/script/AgiPipelineServices.js" method="orchestrateModule" authenticate="anonymous-all">
+        <in-parameters>
+            <parameter name="sourceStepId" required="true"/>
+            <parameter name="subplans" type="List" required="true"/>
+            <parameter name="targetStanceEnumId" default-value="AamPlan"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="spawnedStepIds" type="List"/>
+            <parameter name="spawnedCount" type="Integer"/>
+        </out-parameters>
+    </service>
+
+    <service verb="update" noun="PipelineStepArtifact" type="script" location="component://agi-aide/script/AgiPipelineServices.js" method="updatePipelineStepArtifact" authenticate="anonymous-all">
+        <in-parameters>
+            <parameter name="pipelineStepId" required="true"/>
+            <parameter name="targetArtifactUri" required="true"/>
+        </in-parameters>
+    </service>
+
+    <service verb="promote" noun="PipelineStepToDiscussion" type="script" location="component://agi-aide/script/AgiPipelineServices.js" method="promotePipelineStepToDiscussion" authenticate="anonymous-all">
+        <in-parameters>
+            <parameter name="pipelineStepId" required="true"/>
+            <parameter name="discussionName"/>
+            <parameter name="includeBranch" type="Boolean" default="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="newDiscussionId"/>
+            <parameter name="migratedStepCount" type="Integer"/>
+        </out-parameters>
+    </service>
+
+    <service verb="getOrEnsure" noun="DiscussionDraftPayload" type="script" location="component://agi-aide/script/AgiPipelineServices.js" method="getOrEnsureDiscussionDraftPayload" authenticate="anonymous-all">
+        <in-parameters>
+            <parameter name="discussionId" required="true"/>
+            <parameter name="targetComponent"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="agiPayloadId"/>
+            <parameter name="userPromptText"/>
+            <parameter name="targetComponent"/>
+            <parameter name="filePath"/>
+        </out-parameters>
+    </service>
+
+    <service verb="pin" noun="TurnToDirectives" type="script" location="component://agi-aide/script/AgiPipelineServices.js" method="pinTurnToDirectives" authenticate="anonymous-all">
+        <in-parameters>
+            <parameter name="discussionId" required="true"/>
+            <parameter name="messageId" required="true"/>
+            <parameter name="pinnedTitle"/>
+            <parameter name="pinnedContent" allow-html="any"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="pinnedPayloadId"/>
+            <parameter name="rootPayloadId"/>
+            <parameter name="updatedDirectivesText"/>
+        </out-parameters>
+    </service>
+
+    <service verb="save" noun="DiscussionDirectives" type="script" location="component://agi-aide/script/AgiPipelineServices.js" method="saveDiscussionDirectives" authenticate="anonymous-all">
+        <in-parameters>
+            <parameter name="discussionId" required="true"/>
+            <parameter name="directivesText" required="true" allow-html="any"/>
+            <parameter name="targetComponent"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="agiPayloadId"/>
+            <parameter name="status"/>
+        </out-parameters>
+    </service>
+
+    <service verb="recordAndDispatch" noun="PipelineStep" type="script" location="component://agi-aide/script/AgiPipelineServices.js" method="recordAndDispatchPipelineStep" transaction="ignore" authenticate="anonymous-all">
+        <in-parameters>
+            <parameter name="discussionId" required="true"/>
+            <parameter name="pipelineStepId"/>
+            <parameter name="parentStepId"/>
+            <parameter name="stanceEnumId" default-value="AamPlan"/>
+            <parameter name="directivePrompt" required="true" allow-html="any"/>
+            <parameter name="ingressPayloadId"/>
+            <parameter name="targetArtifactUri"/>
+            <parameter name="stepLabel" allow-html="any"/>
+            <parameter name="aiProfileName"/>
+            <parameter name="modifiedPayloadJson" allow-html="any"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="pipelineStepId"/>
+            <parameter name="egressPayloadId"/>
+            <parameter name="assistantMessageId"/>
+            <parameter name="completionText"/>
+            <parameter name="statusId"/>
+        </out-parameters>
+    </service>
+
+</services>

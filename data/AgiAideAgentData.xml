@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<entity-facade-xml type="seed">
+    <!-- 1. Artifact Group & Authorization for /qapps/agi -->
+    <moqui.security.ArtifactGroup artifactGroupId="AGI_AIDE_APP" description="AGI AIDE Guided App Architect"/>
+    <moqui.security.ArtifactGroupMember artifactGroupId="AGI_AIDE_APP"
+            artifactName="component://agi-aide/screen/AgiAide.xml"
+            artifactTypeEnumId="AT_XML_SCREEN" inheritAuthz="Y"/>
+    <moqui.security.ArtifactAuthz artifactAuthzId="AGI_AIDE_ADMIN"
+            userGroupId="ADMIN" artifactGroupId="AGI_AIDE_APP"
+            authzTypeEnumId="AUTHZT_ALWAYS" authzActionEnumId="AUTHZA_ALL"/>
+
+    <!-- 2. The AGI App Architect Agent Definition -->
+    <moqui.agent.AgentDefinition agentId="agi" agentName="AGI App Architect" featureId="assist" reasoningLevel="medium"
+            surfaces="drawer,chat,tui" startPath="/apps/agi" canvasDialects="openui,vue-sfc,screen-xml,qvue-screen"
+            instructionsLocation="component://agi-aide/prompt/agi.md"
+            description="Guided Discuss-Plan-Build co-pilot for building complete Moqui applications from App Archetypes and Mantle UDM."/>
+
+    <!-- 3. Pin the native Rust Dev AIDE tools so the 'agi' agent gets dev.aide capabilities -->
+    <moqui.agent.AgentToolPolicy agentId="agi" sequenceNum="10" toolPattern="artifact" classificationEnumId="AgclRead" approvalModeEnumId="AgamAsk"/>
+    <moqui.agent.AgentToolPolicy agentId="agi" sequenceNum="20" toolPattern="source" classificationEnumId="AgclRead" approvalModeEnumId="AgamAsk"/>
+    <moqui.agent.AgentToolPolicy agentId="agi" sequenceNum="30" toolPattern="check" classificationEnumId="AgclRead" approvalModeEnumId="AgamAsk"/>
+    <moqui.agent.AgentToolPolicy agentId="agi" sequenceNum="40" toolPattern="propose_edit" classificationEnumId="AgclWrite" approvalModeEnumId="AgamAsk"/>
+    <moqui.agent.AgentToolPolicy agentId="agi" sequenceNum="50" toolPattern="try_service" classificationEnumId="AgclWrite" approvalModeEnumId="AgamAsk"/>
+
+    <!-- 4. Expose AGI's custom services (like classify#AppIntent) to the agent -->
+    <!--
+    <moqui.agent.AgentToolExposure serviceName="org.moqui.agi.AideComponentServices.classify#AppIntent"
+            toolName="classify_app_intent" classificationEnumId="AgclRead"
+            description="Classifies user narrative into an AGI App Archetype (clinical-registry, huddle-ops, facility-asset, service-case) and maps to Dev AIDE gallery templates."/>
+    <moqui.agent.AgentToolPolicy agentId="agi" sequenceNum="60" toolPattern="classify_app_intent" classificationEnumId="AgclRead" approvalModeEnumId="AgamAllow"/>
+    -->
+</entity-facade-xml>

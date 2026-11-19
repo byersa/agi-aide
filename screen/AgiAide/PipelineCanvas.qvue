@@ -1,0 +1,140 @@
+<template>
+    <div class="q-pa-md" id="AgiPipelineCanvas">
+        <!-- Top Pipeline Progress Header -->
+        <q-card flat bordered class="q-mb-md">
+            <q-card-section>
+                <div class="row items-center q-gutter-md">
+                    <div class="text-h6">DAG Pipeline Canvas: Discuss → Plan → Build</div>
+                    <q-space></q-space>
+                    <q-chip dense :color="pipelineStatusColor" text-color="white">
+                        Status: {{ pipelineStatus }}
+                    </q-chip>
+                </div>
+            </q-card-section>
+            <q-separator></q-separator>
+            <q-card-section class="bg-grey-1">
+                <div class="row q-col-gutter-md">
+                    <!-- Stage 1: Discuss -->
+                    <div class="col-12 col-md-4">
+                        <q-card flat bordered :class="{'border-primary': currentStage === 'discuss'}">
+                            <q-card-section>
+                                <div class="text-subtitle2 text-primary">1. Discuss (Elicitation)</div>
+                                <div class="text-caption text-grey-7">Archetype: {{ activeArchetype || 'Pending analysis...' }}</div>
+                            </q-card-section>
+                        </q-card>
+                    </div>
+                    <!-- Stage 2: Plan -->
+                    <div class="col-12 col-md-4">
+                        <q-card flat bordered :class="{'border-primary': currentStage === 'plan'}">
+                            <q-card-section>
+                                <div class="text-subtitle2 text-primary">2. Plan (Architecture Blueprint)</div>
+                                <div class="text-caption text-grey-7">{{ plannedArtifactsCount }} artifacts mapped</div>
+                            </q-card-section>
+                        </q-card>
+                    </div>
+                    <!-- Stage 3: Build -->
+                    <div class="col-12 col-md-4">
+                        <q-card flat bordered :class="{'border-primary': currentStage === 'build'}">
+                            <q-card-section>
+                                <div class="text-subtitle2 text-primary">3. Build (Change Sets & Sim)</div>
+                                <div class="text-caption text-grey-7">{{ executedStepsCount }} steps executed</div>
+                            </q-card-section>
+                        </q-card>
+                    </div>
+                </div>
+            </q-card-section>
+        </q-card>
+
+        <!-- DAG Nodes & Step Inspector -->
+        <div class="row q-col-gutter-md">
+            <div class="col-12 col-md-8">
+                <q-card flat bordered style="min-height: 450px;">
+                    <q-card-section>
+                        <div class="text-subtitle1 text-weight-medium q-mb-sm">Execution Graph & Node Inspector</div>
+                        <q-list separator>
+                            <q-item v-for="node in pipelineNodes" :key="node.id">
+                                <q-item-section avatar>
+                                    <q-icon :name="nodeIcon(node.status)" :color="nodeColor(node.status)" size="28px"/>
+                                </q-item-section>
+                                <q-item-section>
+                                    <q-item-label class="text-weight-bold">{{ node.title }}</q-item-label>
+                                    <q-item-label caption>{{ node.description }}</q-item-label>
+                                </q-item-section>
+                                <q-item-section side>
+                                    <q-badge :color="badgeColor(node.status)">{{ node.status }}</q-badge>
+                                </q-item-section>
+                            </q-item>
+                        </q-list>
+                    </q-card-section>
+                </q-card>
+            </div>
+
+            <!-- Co-Pilot Action & Quick Trigger Panel -->
+            <div class="col-12 col-md-4">
+                <q-card flat bordered>
+                    <q-card-section>
+                        <div class="text-subtitle1 text-weight-medium q-mb-sm">Co-Pilot Controls</div>
+                        <p class="text-caption text-grey-7">
+                            Trigger pipeline phases or review pending change-set approvals directly from the agent runtime.
+                        </p>
+                        <div class="q-gutter-sm">
+                            <q-btn unelevated color="primary" class="full-width" label="Open Assist Co-Pilot (Mod+J)" @click="openAssistDrawer"/>
+                            <q-btn outline color="secondary" class="full-width" label="Refresh Pipeline State" @click="fetchPipelineState"/>
+                        </div>
+                    </q-card-section>
+                </q-card>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script>
+module.exports = {
+    inject: { mScreen: { default: null } },
+    data() {
+        return {
+            currentStage: 'discuss',
+            pipelineStatus: 'Ready',
+            pipelineStatusColor: 'positive',
+            activeArchetype: '',
+            plannedArtifactsCount: 0,
+            executedStepsCount: 0,
+            pipelineNodes: [
+                { id: '1', title: 'Domain Elicitation', description: 'Analyze user intent and match App Archetype', status: 'completed' },
+                { id: '2', title: 'Mantle UDM Grounding', description: 'Verify entity relationships and extensions', status: 'active' },
+                { id: '3', title: 'Screen Scaffolding', description: 'Generate UI views using dev-aide templates', status: 'pending' },
+                { id: '4', title: 'Service Execution Test', description: 'Validate business logic in simulator', status: 'pending' }
+            ]
+        };
+    },
+    mounted() {
+        this.fetchPipelineState();
+    },
+    methods: {
+        fetchPipelineState() {
+            // In production, syncs with active conversation state from /assist endpoints
+            this.pipelineStatus = 'Active Run';
+        },
+        openAssistDrawer() {
+            if (window.moqui && window.moqui.assist) {
+                window.moqui.assist.openDrawer();
+            }
+        },
+        nodeIcon(status) {
+            if (status === 'completed') return 'sym_o_check_circle';
+            if (status === 'active') return 'sym_o_sync';
+            return 'sym_o_radio_button_unchecked';
+        },
+        nodeColor(status) {
+            if (status === 'completed') return 'positive';
+            if (status === 'active') return 'primary';
+            return 'grey';
+        },
+        badgeColor(status) {
+            if (status === 'completed') return 'green';
+            if (status === 'active') return 'blue';
+            return 'grey';
+        }
+    }
+};
+</script>

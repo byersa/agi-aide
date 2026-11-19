@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd"
+        default-menu-title="AGI AIDE" menu-image="sym_o_account_tree" menu-image-type="icon">
+
+    <subscreens default-item="Studio">
+        <subscreens-item name="Studio" menu-title="Pipeline Studio" menu-index="1" location="component://agi-aide/screen/AgiAide/Studio.xml"/>
+    </subscreens>
+
+    <shell-providers>
+        <palette-action label="AGI AIDE: Discuss-Plan-Build Studio" icon="sym_o_account_tree" screen="agi/Studio" sequence="65"/>
+        <page-action label="Open in AGI Pipeline" icon="sym_o_account_tree" agent="agi" sequence="12"/>
+        <assist-prompt label="Start App Elicitation (Discuss)" text="Let's design a new Moqui application using an App Archetype and Mantle UDM."/>
+        <assist-prompt label="Formulate Architecture Plan" text="Create a structured Moqui architecture plan with entities, transitions, and HIPAA rules."/>
+    </shell-providers>
+
+    <widgets>
+        <subscreens-panel id="agi-aide-app" type="popup"/>
+    </widgets>
+</screen>

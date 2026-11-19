@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/component-3.0.xsd"
+           name="agi-aide" version="${moqui_version}" purpose="dev">
+    <!-- Overlay component on top of Dev AIDE and AGI IDE -->
+    <depends on="dev-aide"/>
+    <depends on="mr-boss"/>
+</component>

@@ -1,0 +1,555 @@
+<template>
+    <div class="fit column no-wrap bg-slate-950 font-mono text-white overflow-hidden" style="height: calc(100vh - 50px); min-height: 0;">
+        <div v-if="!ready" class="col column flex-center q-pa-lg">
+            <q-spinner-gears v-if="!failed" color="cyan-4" size="3em" />
+            <div class="text-caption text-slate-300 q-mt-sm">{{ failed || 'Loading AGI Pipeline Studio...' }}</div>
+        </div>
+        <template v-else>
+
+            <!-- TOP HEADER BAR -->
+            <div class="row items-center justify-between q-px-sm bg-slate-950 text-white" style="height: 36px; flex: 0 0 36px; border-bottom: 1px solid #334155;">
+                <div class="row items-center q-gutter-x-sm">
+                    <span class="text-caption text-weight-bolder text-cyan-4">AGI AIDE STUDIO</span>
+                    <q-separator vertical dark />
+                    <q-btn
+                        flat dense no-caps size="xs"
+                        icon="list"
+                        label="Discussions"
+                        :color="showDiscussionDrawer ? 'cyan-4' : 'grey-4'"
+                        class="q-px-sm rounded-borders bg-slate-900"
+                        style="border: 1px solid #334155;"
+                        @click="toggleDiscussionDrawer"
+                    />
+                    <q-btn
+                        flat dense no-caps size="xs"
+                        icon="account_tree"
+                        label="DAG Canvas"
+                        :color="showDagDrawer ? 'amber-4' : 'grey-4'"
+                        class="q-px-sm rounded-borders bg-slate-900"
+                        style="border: 1px solid #334155;"
+                        @click="toggleDagDrawer"
+                    />
+                    <q-separator vertical dark />
+                    <q-btn-dropdown
+                        flat dense no-caps size="xs"
+                        icon="extension"
+                        :label="targetComponentName || 'Select Component'"
+                        color="amber-3"
+                        class="q-px-sm rounded-borders bg-slate-900 font-mono"
+                        style="border: 1px solid #f59e0b; max-width: 220px;"
+                        content-class="bg-slate-900 text-white font-mono"
+                        :loading="droppingComponent || loadingComponents"
+                        @before-show="loadTargetComponents(false)"
+                    >
+                        <q-list dense dark style="min-width: 260px; border: 1px solid #334155;">
+                            <q-item-label header class="text-caption text-slate-400 q-py-xs">
+                                DOMAIN COMPONENT: <span class="text-amber-3 text-weight-bold">{{ targetComponentName || '(none)' }}</span>
+                            </q-item-label>
+                            <q-separator dark />
+                            <template v-if="availableComponents.length > 0">
+                                <q-item
+                                    v-for="comp in availableComponents"
+                                    :key="comp.name"
+                                    clickable v-close-popup
+                                    :active="comp.name === targetComponentName"
+                                    active-class="bg-slate-800 text-amber-3"
+                                    @click="selectTargetComponent(comp.name)"
+                                >
+                                    <q-item-section avatar style="min-width: 28px;">
+                                        <q-icon
+                                            :name="comp.name === targetComponentName ? 'check_circle' : 'folder'"
+                                            size="xs"
+                                            :color="comp.name === targetComponentName ? 'amber-3' : 'slate-400'"
+                                        />
+                                    </q-item-section>
+                                    <q-item-section>
+                                        <q-item-label class="text-caption">{{ comp.name }}</q-item-label>
+                                    </q-item-section>
+                                    <q-item-section side>
+                                        <span class="text-caption text-slate-400" style="font-size: 10px;">{{ comp.set }}</span>
+                                    </q-item-section>
+                                </q-item>
+                            </template>
+                            <q-item v-else dense>
+                                <q-item-section>
+                                    <q-item-label caption class="text-slate-400">No user components found</q-item-label>
+                                </q-item-section>
+                            </q-item>
+                            <q-separator dark />
+                            <q-item clickable v-close-popup @click="promptSwitchTargetComponent">
+                                <q-item-section avatar style="min-width: 28px;">
+                                    <q-icon name="add_circle_outline" size="xs" color="amber-3" />
+                                </q-item-section>
+                                <q-item-section>
+                                    <q-item-label class="text-caption">New / Set Target Component...</q-item-label>
+                                    <q-item-label caption class="text-slate-400">Switch or enter a target component</q-item-label>
+                                </q-item-section>
+                            </q-item>
+                            <q-item
+                                clickable v-close-popup
+                                :disable="!targetComponentName"
+                                @click="editComponentPrompt"
+                            >
+                                <q-item-section avatar style="min-width: 28px;">
+                                    <q-icon name="edit_note" size="xs" :color="targetComponentName ? 'cyan-4' : 'grey-6'" />
+                                </q-item-section>
+                                <q-item-section>
+                                    <q-item-label class="text-caption">Edit prompt/component.md</q-item-label>
+                                    <q-item-label caption class="text-slate-400">Open in Dev AIDE Workspace</q-item-label>
+                                </q-item-section>
+                            </q-item>
+                            <q-separator dark />
+                            <q-item
+                                clickable v-close-popup
+                                :disable="!targetComponentName || isProtectedComponent || droppingComponent"
+                                @click="confirmDeleteComponent"
+                            >
+                                <q-item-section avatar style="min-width: 28px;">
+                                    <q-icon name="delete_forever" size="xs" :color="(!targetComponentName || isProtectedComponent) ? 'grey-6' : 'red-4'" />
+                                </q-item-section>
+                                <q-item-section>
+                                    <q-item-label class="text-caption" :class="(!targetComponentName || isProtectedComponent) ? 'text-grey-5' : 'text-red-4'">
+                                        Delete Component
+                                    </q-item-label>
+                                    <q-item-label caption class="text-slate-400">
+                                        {{ isProtectedComponent ? 'Protected system component' : (!targetComponentName ? 'No component selected' : 'Purge DB records & component files') }}
+                                    </q-item-label>
+                                </q-item-section>
+                            </q-item>
+                        </q-list>
+                    </q-btn-dropdown>
+                    <q-btn
+                        flat dense no-caps size="xs"
+                        icon="smart_toy"
+                        label="Assist"
+                        color="cyan-3"
+                        class="q-px-sm rounded-borders bg-slate-900"
+                        style="border: 1px solid #0284c7;"
+                        @click="openAssistDrawer"
+                    />
+                </div>
+                <div class="row items-center q-gutter-x-xs">
+                    <q-btn
+                        flat dense no-caps size="xs"
+                        icon="dashboard_customize"
+                        label="Open Dev AIDE"
+                        color="amber-3"
+                        class="q-px-sm rounded-borders bg-slate-900"
+                        style="border: 1px solid #f59e0b;"
+                        @click="openInDevAide(localScreenPath)"
+                    />
+                </div>
+            </div>
+
+            <!-- SLIDING DRAWER 1: PIPELINE INITIATIVES -->
+            <q-slide-transition>
+                <div v-if="showDiscussionDrawer" class="full-width column no-wrap bg-slate-900 shadow-10" style="height: 300px; flex: 0 0 300px; border-bottom: 2px solid #0284c7; z-index: 35;">
+                    <div class="row items-center justify-between q-px-sm bg-black" style="height: 26px; border-bottom: 1px solid #1e293b;">
+                        <span class="text-caption text-cyan-3 text-weight-bold">PIPELINE INITIATIVES &amp; DISCUSSIONS</span>
+                        <q-btn flat round dense icon="close" size="xs" color="slate-400" @click="showDiscussionDrawer = false" />
+                    </div>
+                    <div class="col overflow-auto">
+                        <agi-pipeline-index
+                            v-if="ready"
+                            ref="pipelineIndexRef"
+                            :active-discussion-id="activeDiscussionId"
+                            :target-component="targetComponentName"
+                            @pipeline-selected="onPipelineSelected"
+                            @new-pipeline-created="onPipelineSelected"
+                        />
+                    </div>
+                </div>
+            </q-slide-transition>
+
+            <!-- SLIDING DRAWER 2: DAG CANVAS -->
+            <q-slide-transition>
+                <div v-if="showDagDrawer" class="full-width column no-wrap bg-slate-900 shadow-10" style="height: 420px; flex: 0 0 420px; border-bottom: 2px solid #f59e0b; z-index: 35;">
+                    <div class="row items-center justify-between q-px-sm bg-black" style="height: 26px; border-bottom: 1px solid #1e293b;">
+                        <span class="text-caption text-amber-3 text-weight-bold">PIPELINE DIRECTED ACYCLIC GRAPH (DAG)</span>
+                        <q-btn flat round dense icon="close" size="xs" color="slate-400" @click="showDagDrawer = false" />
+                    </div>
+                    <div class="col overflow-hidden">
+                        <agi-pipeline-canvas
+                            v-if="ready"
+                            ref="globalCanvasRef"
+                            :discussion-id="activeDiscussionId"
+                            :target-component="targetComponentName"
+                            :selected-stage-id="selectedStage?.pipelineStepId || selectedStage?.stageId || ''"
+                            @stage-selected="onStageSelected"
+                            @open-artifact="openInDevAide"
+                        />
+                    </div>
+                </div>
+            </q-slide-transition>
+
+            <!-- MAIN FULL-WIDTH AGI STUDIO -->
+            <div class="col full-width overflow-hidden" style="flex: 1 1 0%; min-height: 0;">
+                <agi-studio
+                    :active-artifact="localScreenPath"
+                    :target-component-prop="targetComponentName"
+                    :width-percent="100"
+                    :show-discussion-drawer="showDiscussionDrawer"
+                    :show-dag-drawer="showDagDrawer"
+                    :show-blueprint-drawer="showBlueprintDrawer"
+                    :active-discussion-id-prop="activeDiscussionId"
+                    :active-discussion-title-prop="activeDiscussionTitle"
+                    :selected-stage-prop="selectedStage"
+                    @toggle-discussion="toggleDiscussionDrawer"
+                    @toggle-dag="toggleDagDrawer"
+                    @toggle-blueprint="toggleBlueprintDrawer"
+                    @pipeline-selected="onPipelineSelected"
+                    @stage-selected="onStageSelected"
+                    @stage-dispatched="onStageDispatched"
+                    @open-artifact="openInDevAide"
+                />
+            </div>
+        </template>
+    </div>
+</template>
+
+<script>
+module.exports = {
+    components: {
+        'agi-pipeline-index': window.AgiPipelineIndex || { template: '<div>Loading Pipeline Index...</div>' },
+        'agi-pipeline-canvas': window.AgiPipelineCanvas || { template: '<div>Loading Canvas...</div>' },
+        'agi-studio': window.AgiStudio || { template: '<div>Loading Studio...</div>' }
+    },
+    data() {
+        return {
+            ready: false,
+            failed: '',
+            targetComponentName: '',
+            localScreenPath: '',
+            showDiscussionDrawer: false,
+            showDagDrawer: false,
+            showBlueprintDrawer: false,
+            activeDiscussionId: '',
+            activeDiscussionTitle: '',
+            selectedStage: null,
+            selectedParentStage: null,
+            droppingComponent: false,
+            loadingComponents: false,
+            availableComponents: [],
+            devAideRoots: []
+        };
+    },
+    computed: {
+        isProtectedComponent() {
+            const protectedSet = new Set([
+                'agi-aide', 'dev-aide', 'moqui-usl', 'mantle-usl',
+                'webroot', 'tools', 'system', 'framework', 'basic-comms'
+            ]);
+            return protectedSet.has(String(this.targetComponentName || '').trim().toLowerCase());
+        }
+    },
+    mounted() {
+        if (this.$q && this.$q.dark) this.$q.dark.set(true);
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const compParam = urlParams.get('component') || urlParams.get('targetComponent');
+        if (compParam) this.targetComponentName = compParam;
+
+        // Lightweight fetch-backed axios shim matching { data } response contract + Moqui session token
+        if (!window.axios) {
+            const buildUrl = (url, params) => {
+                if (!params) return url;
+                const qs = new URLSearchParams();
+                Object.keys(params).forEach(k => {
+                    if (params[k] !== undefined && params[k] !== null && params[k] !== '') {
+                        qs.set(k, params[k]);
+                    }
+                });
+                const str = qs.toString();
+                return str ? `${url}${url.includes('?') ? '&' : '?'}${str}` : url;
+            };
+            const req = async (method, url, body, config = {}) => {
+                const fullUrl = buildUrl(url, config.params);
+                const token = (window.moqui && (window.moqui.sessionToken || window.moqui.webrootVue?.sessionToken)) || '';
+                const headers = Object.assign({ 'Accept': 'application/json' }, config.headers || {});
+                if (token) headers['moquiSessionToken'] = token;
+                const opts = { method, headers, credentials: 'same-origin' };
+                if (body !== undefined && body !== null && method !== 'GET' && method !== 'DELETE') {
+                    headers['Content-Type'] = 'application/json';
+                    opts.body = typeof body === 'string' ? body : JSON.stringify(body);
+                }
+                const res = await fetch(fullUrl, opts);
+                const text = await res.text();
+                let data = null;
+                try { data = text ? JSON.parse(text) : {}; } catch (e) { data = text; }
+                if (!res.ok) {
+                    const err = new Error((data && (data.errors || data.message)) || `HTTP ${res.status}`);
+                    err.response = { status: res.status, data };
+                    throw err;
+                }
+                return { data, status: res.status };
+            };
+            window.axios = {
+                get: (url, config) => req('GET', url, null, config),
+                delete: (url, config) => req('DELETE', url, null, config),
+                post: (url, body, config) => req('POST', url, body, config),
+                put: (url, body, config) => req('PUT', url, body, config)
+            };
+        }
+
+        const moqui = window.moqui;
+        this.loadDevAideRoots();
+        this.loadTargetComponents(!compParam);
+        
+        const scripts = [
+            '/agistatic/AgiPipelineIndex.qvt.js',
+            '/agistatic/AgiPipelineCanvas.qvt.js',
+            '/agistatic/inspector/AgiStageHeader.qvt.js',
+            '/agistatic/inspector/AgiStageIngressViewport.qvt.js',
+            '/agistatic/inspector/AgiDiscussionViewer.qvt.js',
+            '/agistatic/inspector/AgiPlanSpecViewer.qvt.js',
+            '/agistatic/AgiStageInspector.qvt.js',
+            '/agistatic/AgiStudio.qvt.js'
+        ];
+
+        scripts.reduce((p, src) => p.then(() => moqui.loadScript(src)), Promise.resolve())
+            .then(() => {
+                // Register dynamically after scripts load
+                if (window.AgiPipelineIndex) this.$options.components['agi-pipeline-index'] = window.AgiPipelineIndex;
+                if (window.AgiPipelineCanvas) this.$options.components['agi-pipeline-canvas'] = window.AgiPipelineCanvas;
+                if (window.AgiStudio) this.$options.components['agi-studio'] = window.AgiStudio;
+
+                this.ready = true;
+            })
+            .catch(err => {
+                this.failed = 'Failed to load AGI Studio: ' + (err && err.message || err);
+            });
+    },
+    methods: {
+        toggleDiscussionDrawer() {
+            this.showDiscussionDrawer = !this.showDiscussionDrawer;
+            if (this.showDiscussionDrawer) {
+                this.showDagDrawer = false;
+                this.showBlueprintDrawer = false;
+            }
+        },
+        toggleDagDrawer() {
+            this.showDagDrawer = !this.showDagDrawer;
+            if (this.showDagDrawer) {
+                this.showDiscussionDrawer = false;
+                this.showBlueprintDrawer = false;
+                this.$nextTick(() => {
+                    setTimeout(() => {
+                        if (this.$refs.globalCanvasRef && this.$refs.globalCanvasRef.scheduleRecalcEdges) {
+                            this.$refs.globalCanvasRef.scheduleRecalcEdges();
+                        }
+                    }, 150);
+                });
+            }
+        },
+        toggleBlueprintDrawer() {
+            this.showBlueprintDrawer = !this.showBlueprintDrawer;
+            if (this.showBlueprintDrawer) {
+                this.showDiscussionDrawer = false;
+                this.showDagDrawer = false;
+            }
+        },
+        onPipelineSelected(item) {
+            if (!item) return;
+            this.activeDiscussionId = String(item.discussionId || '');
+            this.activeDiscussionTitle = item.name || item.title || ('Pipeline #' + this.activeDiscussionId);
+            this.selectedStage = null;
+            this.selectedParentStage = null;
+            if (item.targetArtifactUri) this.localScreenPath = item.targetArtifactUri;
+            this.showDiscussionDrawer = false;
+        },
+        onStageSelected(payload) {
+            if (payload && payload.stage) {
+                this.selectedStage = payload.stage;
+                this.selectedParentStage = payload.parentStage;
+            } else {
+                this.selectedStage = payload;
+                this.selectedParentStage = null;
+            }
+        },
+        async onStageDispatched() {
+            if (this.$refs.globalCanvasRef && this.$refs.globalCanvasRef.fetchPipelineGraph) {
+                await this.$refs.globalCanvasRef.fetchPipelineGraph();
+            }
+        },
+        openInDevAide(payload) {
+            const uri = typeof payload === 'string' ? payload : (payload && payload.artifactUri || this.localScreenPath || '');
+            if (!uri) {
+                window.open('/qapps/dev/Workspace', '_blank');
+                return;
+            }
+            if (uri.includes('/screen/') && uri.endsWith('.xml')) {
+                const match = uri.match(/component:\/\/[^/]+\/screen\/(.+)\.xml$/);
+                const screenPath = match ? '/' + match[1] : '';
+                const target = screenPath
+                    ? '/qapps/dev/Screens/Design?page=' + encodeURIComponent(screenPath)
+                    : '/qapps/dev/Screens';
+                window.open(target, '_blank');
+            } else {
+                window.open('/qapps/dev/Workspace', '_blank');
+            }
+        },
+        openAssistDrawer() {
+            if (window.moqui && window.moqui.assist && window.moqui.assist.openDrawer) {
+                window.moqui.assist.openDrawer();
+            }
+        },
+        async loadTargetComponents(autoSelectFirst = false) {
+            if (!window.axios) return;
+            this.loadingComponents = true;
+            try {
+                const resp = await window.axios.get('/rest/s1/agi-ai/component/list');
+                const list = (resp && resp.data && Array.isArray(resp.data.components))
+                    ? resp.data.components
+                    : [];
+                this.availableComponents = list;
+                if (autoSelectFirst && !this.targetComponentName) {
+                    this.targetComponentName = list.length > 0 ? String(list[0].name || '') : '';
+                }
+            } catch (e) {
+                // Keep existing list on transient error
+            } finally {
+                this.loadingComponents = false;
+            }
+        },
+        selectTargetComponent(nextName) {
+            const next = String(nextName || '').trim();
+            if (!next || next === this.targetComponentName) return;
+            this.targetComponentName = next;
+            this.activeDiscussionId = '';
+            this.activeDiscussionTitle = '';
+            this.selectedStage = null;
+            this.selectedParentStage = null;
+            this.localScreenPath = '';
+            this.loadDevAideRoots();
+            if (this.$q && this.$q.notify) {
+                this.$q.notify({
+                    type: 'info',
+                    message: `Switched target component to "${next}"`,
+                    timeout: 2000
+                });
+            }
+        },
+        async loadDevAideRoots() {
+            if (!window.axios) return;
+            try {
+                const resp = await window.axios.get('/qapps/dev/Workspace/roots');
+                if (resp && resp.data && Array.isArray(resp.data.roots)) {
+                    this.devAideRoots = resp.data.roots;
+                }
+            } catch (e) {
+                // Best-effort lookup; falls back to direct rootId=targetComponentName
+            }
+        },
+        resolveWorkspaceFileUrl(compName, relativeFile) {
+            const comp = String(compName || '').trim();
+            if (!comp) return '/qapps/dev/Workspace';
+            const lower = comp.toLowerCase();
+            for (const root of (this.devAideRoots || [])) {
+                const components = Array.isArray(root.components) ? root.components : [];
+                const match = components.find(c => String(c.name || '').toLowerCase() === lower);
+                if (match) {
+                    const base = String(match.path || '').replace(/^\/+|\/+$/g, '');
+                    const filePath = base ? (base + '/' + relativeFile) : relativeFile;
+                    return '/qapps/dev/Workspace?rootId=' + encodeURIComponent(root.id) +
+                        '&path=' + encodeURIComponent(filePath);
+                }
+            }
+            return '/qapps/dev/Workspace?rootId=' + encodeURIComponent(comp) +
+                '&path=' + encodeURIComponent(relativeFile);
+        },
+        editComponentPrompt() {
+            const comp = String(this.targetComponentName || '').trim();
+            if (!comp) return;
+            const url = this.resolveWorkspaceFileUrl(comp, 'prompt/component.md');
+            window.open(url, '_blank');
+        },
+        promptSwitchTargetComponent() {
+            if (!this.$q || typeof this.$q.dialog !== 'function') return;
+            this.$q.dialog({
+                title: 'Switch / Rename Target Component',
+                message: 'Enter the target component name:',
+                prompt: {
+                    model: this.targetComponentName || '',
+                    type: 'text',
+                    isValid: val => /^[A-Za-z][A-Za-z0-9_-]*$/.test(String(val || '').trim())
+                },
+                dark: true,
+                cancel: true,
+                persistent: true
+            }).onOk((value) => {
+                this.selectTargetComponent(value);
+            });
+        },
+        confirmDeleteComponent() {
+            const comp = String(this.targetComponentName || '').trim();
+            if (!comp || this.isProtectedComponent) {
+                if (this.$q && this.$q.notify) {
+                    this.$q.notify({
+                        type: 'warning',
+                        message: `Cannot delete protected system component "${comp}"`
+                    });
+                }
+                return;
+            }
+            if (!this.$q || typeof this.$q.dialog !== 'function') return;
+            this.$q.dialog({
+                title: `Delete Component "${comp}"?`,
+                message: `This will permanently purge all AGI discussions, messages, payloads, and pipeline steps for "${comp}", delete its component directory from disk, and clear Moqui caches.`,
+                dark: true,
+                cancel: true,
+                persistent: true,
+                focus: 'cancel',
+                ok: {
+                    label: 'Delete Component',
+                    color: 'negative',
+                    unelevated: true
+                }
+            }).onOk(async () => {
+                this.droppingComponent = true;
+                try {
+                    const resp = await window.axios.post('/rest/s1/agi-ai/component/drop', {
+                        componentName: comp
+                    });
+                    const data = (resp && resp.data) || {};
+                    if (data.errors || data.success === false) {
+                        throw new Error(data.errors || data.message || 'Drop component failed');
+                    }
+                    this.targetComponentName = '';
+                    this.activeDiscussionId = '';
+                    this.activeDiscussionTitle = '';
+                    this.selectedStage = null;
+                    this.selectedParentStage = null;
+                    this.localScreenPath = '';
+                    await this.loadTargetComponents(true);
+                    this.loadDevAideRoots();
+                    if (this.$refs.pipelineIndexRef && this.$refs.pipelineIndexRef.fetchInitiatives) {
+                        this.$refs.pipelineIndexRef.fetchInitiatives();
+                    }
+                    if (this.$refs.globalCanvasRef && this.$refs.globalCanvasRef.fetchPipelineGraph) {
+                        this.$refs.globalCanvasRef.fetchPipelineGraph();
+                    }
+                    if (this.$q && this.$q.notify) {
+                        this.$q.notify({
+                            type: 'positive',
+                            message: data.message || `Component "${comp}" deleted.`,
+                            timeout: 3500
+                        });
+                    }
+                } catch (err) {
+                    const msg = (err && err.response && err.response.data && (err.response.data.errors || err.response.data.message))
+                        || (err && err.message) || String(err);
+                    if (this.$q && this.$q.notify) {
+                        this.$q.notify({
+                            type: 'negative',
+                            message: `Failed to delete "${comp}": ${msg}`,
+                            timeout: 6000
+                        });
+                    }
+                } finally {
+                    this.droppingComponent = false;
+                }
+            });
+        }
+    }
+};
+</script>

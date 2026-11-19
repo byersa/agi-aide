@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <service verb="list" noun="TargetComponents" type="script"
+             location="component://agi-aide/service/org/moqui/ai/ListTargetComponents.js"
+             authenticate="anonymous-all" read-only="true">
+        <description>
+            Discovers existing non-protected user components across the runtime component
+            directories (addon, dev, test, and legacy component folder) and loaded non-base
+            components, sorted alphabetically by name.
+        </description>
+        <out-parameters>
+            <parameter name="components" type="List"/>
+            <parameter name="componentNames" type="List"/>
+        </out-parameters>
+    </service>
+
+    <service verb="drop" noun="Component" type="script"
+             location="component://agi-aide/service/org/moqui/ai/ComponentServices.js"
+             authenticate="anonymous-all">
+        <description>
+            Purges all AGI pipeline, payload, message, and discussion records for componentName in
+            foreign-key-safe order, deletes the componentName directory from the runtime components
+            folder (matching dev-aide's component root path), and clears Moqui resource and screen
+            caches. Refuses protected system components and invalid component names.
+        </description>
+        <in-parameters>
+            <parameter name="componentName" type="String" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+            <parameter name="componentName" type="String"/>
+            <parameter name="deletedRecords" type="Map"/>
+            <parameter name="deletedDirectory" type="String"/>
+            <parameter name="directoryDeleted" type="Boolean"/>
+            <parameter name="cachesCleared" type="Boolean"/>
+            <parameter name="message" type="String"/>
+        </out-parameters>
+    </service>
+
+</services>

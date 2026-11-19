@@ -1,0 +1,271 @@
+(function () {
+    const AgiAideStudio = {
+        name: 'AgiAideStudio',
+        data() {
+            return {
+                targetComponentName: 'nursinghome',
+                localScreenPath: '',
+                showDiscussionDrawer: false,
+                showDagDrawer: false,
+                showBlueprintDrawer: false,
+                activeDiscussionId: '',
+                activeDiscussionTitle: '',
+                selectedStage: null,
+                selectedParentStage: null,
+                ready: true
+            };
+        },
+        mounted() {
+            if (this.$q && this.$q.dark) this.$q.dark.set(true);
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const compParam = urlParams.get('component') || urlParams.get('targetComponent');
+            if (compParam) this.targetComponentName = compParam;
+        },
+        methods: {
+            loadAssets() {
+                const base = '/ssstatic/apps/agi/assets';
+                const files = [
+                    `${base}/AgiPipelineIndex.qvt.js`,
+                    `${base}/AgiPipelineCanvas.qvt.js`,
+                    `${base}/inspector/AgiStageHeader.qvt.js`,
+                    `${base}/inspector/AgiStageIngressViewport.qvt.js`,
+                    `${base}/inspector/AgiDiscussionViewer.qvt.js`,
+                    `${base}/inspector/AgiPlanSpecViewer.qvt.js`,
+                    `${base}/AgiStageInspector.qvt.js`,
+                    `${base}/AgiStudio.qvt.js`
+                ];
+
+                let loaded = 0;
+                const checkDone = () => {
+                    loaded++;
+                    if (loaded >= files.length) {
+                        setTimeout(() => { this.ready = true; }, 80);
+                    }
+                };
+
+                files.forEach(src => {
+                    if (document.querySelector(`script[src="${src}"]`)) {
+                        checkDone();
+                        return;
+                    }
+                    const s = document.createElement('script');
+                    s.type = 'text/javascript';
+                    s.src = src;
+                    s.async = false;
+                    s.onload = checkDone;
+                    s.onerror = checkDone;
+                    document.head.appendChild(s);
+                });
+            },
+
+            toggleDiscussionDrawer() {
+                this.showDiscussionDrawer = !this.showDiscussionDrawer;
+                if (this.showDiscussionDrawer) {
+                    this.showDagDrawer = false;
+                    this.showBlueprintDrawer = false;
+                }
+            },
+
+            toggleDagDrawer() {
+                this.showDagDrawer = !this.showDagDrawer;
+                if (this.showDagDrawer) {
+                    this.showDiscussionDrawer = false;
+                    this.showBlueprintDrawer = false;
+                    this.$nextTick(() => {
+                        setTimeout(() => {
+                            if (this.$refs.globalCanvasRef?.scheduleRecalcEdges) {
+                                this.$refs.globalCanvasRef.scheduleRecalcEdges();
+                            }
+                        }, 150);
+                    });
+                }
+            },
+
+            toggleBlueprintDrawer() {
+                this.showBlueprintDrawer = !this.showBlueprintDrawer;
+                if (this.showBlueprintDrawer) {
+                    this.showDiscussionDrawer = false;
+                    this.showDagDrawer = false;
+                }
+            },
+
+            onPipelineSelected(item) {
+                if (!item) return;
+                this.activeDiscussionId = String(item.discussionId || '');
+                this.activeDiscussionTitle = item.name || item.title || `Pipeline #${this.activeDiscussionId}`;
+                this.selectedStage = null;
+                this.selectedParentStage = null;
+                if (item.targetArtifactUri) this.localScreenPath = item.targetArtifactUri;
+                this.showDiscussionDrawer = false;
+            },
+
+            onStageSelected(payload) {
+                if (payload && payload.stage) {
+                    this.selectedStage = payload.stage;
+                    this.selectedParentStage = payload.parentStage;
+                } else {
+                    this.selectedStage = payload;
+                    this.selectedParentStage = null;
+                }
+            },
+
+            async onStageDispatched(eventData) {
+                if (this.$refs.globalCanvasRef?.fetchPipelineGraph) {
+                    await this.$refs.globalCanvasRef.fetchPipelineGraph();
+                }
+            },
+
+            openInDevAide(payload) {
+                const uri = typeof payload === 'string' ? payload : (payload?.artifactUri || this.localScreenPath || '');
+                if (!uri) {
+                    window.open('/qapps/dev/Workspace', '_blank');
+                    return;
+                }
+                // Screen XML -> Dev AIDE Screen Builder; anything else -> Dev AIDE Workspace
+                if (uri.includes('/screen/') && uri.endsWith('.xml')) {
+                    const match = uri.match(/component:\/\/[^/]+\/screen\/(.+)\.xml$/);
+                    const screenPath = match ? `/${match[1]}` : '';
+                    const target = screenPath
+                        ? `/qapps/dev/Screens/Design?page=${encodeURIComponent(screenPath)}`
+                        : '/qapps/dev/Screens';
+                    window.open(target, '_blank');
+                } else {
+                    window.open('/qapps/dev/Workspace', '_blank');
+                }
+            },
+
+            openAssistDrawer() {
+                if (window.moqui?.assist?.openDrawer) {
+                    window.moqui.assist.openDrawer();
+                }
+            }
+        },
+        template: `
+            <div class="fit column no-wrap bg-slate-950 font-mono text-white overflow-hidden" style="height: calc(100vh - 50px); min-height: 0;">
+
+                <!-- TOP HEADER BAR -->
+                <div class="row items-center justify-between q-px-sm bg-slate-950 text-white" style="height: 36px; flex: 0 0 36px; border-bottom: 1px solid #334155;">
+                    <div class="row items-center q-gutter-x-sm">
+                        <span class="text-caption text-weight-bolder text-cyan-4">AGI AIDE STUDIO</span>
+                        <q-separator vertical dark />
+                        <q-input
+                            v-model="targetComponentName"
+                            dense dark outlined
+                            label="Target Component"
+                            style="width: 180px;"
+                            input-class="text-caption font-mono text-amber-3"
+                        />
+                        <q-btn
+                            flat dense no-caps size="xs"
+                            icon="smart_toy"
+                            label="Assist Co-Pilot (Mod+J)"
+                            color="cyan-3"
+                            class="q-px-sm rounded-borders bg-slate-900"
+                            style="border: 1px solid #0284c7;"
+                            @click="openAssistDrawer"
+                        />
+                    </div>
+                    <div class="row items-center q-gutter-x-xs">
+                        <q-btn
+                            flat dense no-caps size="xs"
+                            icon="dashboard_customize"
+                            label="Open Dev AIDE"
+                            color="amber-3"
+                            class="q-px-sm rounded-borders bg-slate-900"
+                            style="border: 1px solid #f59e0b;"
+                            @click="openInDevAide(localScreenPath)"
+                        />
+                    </div>
+                </div>
+
+                <!-- SLIDING DRAWER 1: PIPELINE INITIATIVES -->
+                <q-slide-transition>
+                    <div v-if="showDiscussionDrawer" class="full-width column no-wrap bg-slate-900 shadow-10" style="height: 300px; flex: 0 0 300px; border-bottom: 2px solid #0284c7; z-index: 35;">
+                        <div class="row items-center justify-between q-px-sm bg-black" style="height: 26px; border-bottom: 1px solid #1e293b;">
+                            <span class="text-caption text-cyan-3 text-weight-bold">PIPELINE INITIATIVES &amp; DISCUSSIONS</span>
+                            <q-btn flat round dense icon="close" size="xs" color="slate-400" @click="showDiscussionDrawer = false" />
+                        </div>
+                        <div class="col overflow-auto">
+                            <agi-pipeline-index
+                                :active-discussion-id="activeDiscussionId"
+                                :target-component="targetComponentName"
+                                @pipeline-selected="onPipelineSelected"
+                                @new-pipeline-created="onPipelineSelected"
+                            />
+                        </div>
+                    </div>
+                </q-slide-transition>
+
+                <!-- SLIDING DRAWER 2: DAG CANVAS -->
+                <q-slide-transition>
+                    <div v-if="showDagDrawer" class="full-width column no-wrap bg-slate-900 shadow-10" style="height: 420px; flex: 0 0 420px; border-bottom: 2px solid #f59e0b; z-index: 35;">
+                        <div class="row items-center justify-between q-px-sm bg-black" style="height: 26px; border-bottom: 1px solid #1e293b;">
+                            <span class="text-caption text-amber-3 text-weight-bold">PIPELINE DIRECTED ACYCLIC GRAPH (DAG)</span>
+                            <q-btn flat round dense icon="close" size="xs" color="slate-400" @click="showDagDrawer = false" />
+                        </div>
+                        <div class="col overflow-hidden">
+                            <agi-pipeline-canvas
+                                ref="globalCanvasRef"
+                                :discussion-id="activeDiscussionId"
+                                :target-component="targetComponentName"
+                                :selected-stage-id="selectedStage?.pipelineStepId || selectedStage?.stageId || ''"
+                                @stage-selected="onStageSelected"
+                                @open-artifact="openInDevAide"
+                            />
+                        </div>
+                    </div>
+                </q-slide-transition>
+
+                <!-- MAIN FULL-WIDTH AGI STUDIO -->
+                <div v-if="!ready" class="col column flex-center">
+                    <q-spinner-gears color="cyan-4" size="3em" />
+                    <div class="text-caption text-slate-400 q-mt-sm">Loading AGI Pipeline Studio...</div>
+                </div>
+                <div v-else class="col full-width overflow-hidden" style="flex: 1 1 0%; min-height: 0;">
+                    <agi-studio
+                        :active-artifact="localScreenPath"
+                        :target-component-prop="targetComponentName"
+                        :width-percent="100"
+                        :show-discussion-drawer="showDiscussionDrawer"
+                        :show-dag-drawer="showDagDrawer"
+                        :show-blueprint-drawer="showBlueprintDrawer"
+                        :active-discussion-id-prop="activeDiscussionId"
+                        :active-discussion-title-prop="activeDiscussionTitle"
+                        :selected-stage-prop="selectedStage"
+                        @toggle-discussion="toggleDiscussionDrawer"
+                        @toggle-dag="toggleDagDrawer"
+                        @toggle-blueprint="toggleBlueprintDrawer"
+                        @pipeline-selected="onPipelineSelected"
+                        @stage-selected="onStageSelected"
+                        @stage-dispatched="onStageDispatched"
+                        @open-artifact="openInDevAide"
+                    />
+                </div>
+            </div>
+        `
+    };
+
+    window.AgiAideStudio = AgiAideStudio;
+
+    // Register all AGI Studio components in mr-moqui's qvt.components registry
+    if (window.moqui && window.moqui.qvt && window.moqui.qvt.components) {
+        const allAgiComps = {
+            'agi-pipeline-index': window.AgiPipelineIndex,
+            'agi-pipeline-canvas': window.AgiPipelineCanvas,
+            'agi-stage-header': window.AgiStageHeader,
+            'agi-stage-ingress-viewport': window.AgiStageIngressViewport,
+            'agi-discussion-viewer': window.AgiDiscussionViewer,
+            'agi-plan-spec-viewer': window.AgiPlanSpecViewer,
+            'agi-stage-inspector': window.AgiStageInspector,
+            'agi-studio': window.AgiStudio,
+            'agi-aide-studio': AgiAideStudio
+        };
+        Object.keys(allAgiComps).forEach(name => {
+            if (allAgiComps[name]) {
+                window.moqui.qvt.components[name] = allAgiComps[name];
+            }
+        });
+    }
+
+})();

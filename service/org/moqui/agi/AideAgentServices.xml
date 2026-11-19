@@ -1,0 +1,33 @@
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+    <service verb="handle" noun="AssistPrompt" type="inline">
+        <in-parameters>
+            <parameter name="prompt" required="true"/>
+            <parameter name="artifactType"/>
+            <parameter name="filePath"/>
+            <parameter name="selectedText"/>
+            <parameter name="outlineContext"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="mutations" type="List"><description>A list of dev-aide mutation ops like {op: 'insert', at: [1,2], xml: '...'}</description></parameter>
+            <parameter name="responseMessage"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                // Bridge to your local Qwen MCP Toolchain
+                Map aiResult = ec.service.sync()
+                    .name("org.moqui.ai.AgiAiGatewayServices.run#OpenAiProxy")
+                    .parameters([
+                        systemInstruction: "You are an expert Moqui developer. Analyze the file context. Return JSON operations.",
+                        userPrompt: "Prompt: ${prompt}\nFile: ${filePath}\nContext: ${outlineContext}",
+                        mode: "mutate",
+                        aiProfileName: "local-qwen"
+                    ])
+                    .call()
+                
+                // Parse AI returned mutations (using dev-aide's pure.apply format)
+                context.mutations = aiResult.mutations ?: []
+                context.responseMessage = aiResult.completionText
+            ]]></script>
+        </actions>
+    </service>
+</services>

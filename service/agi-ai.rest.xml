@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resource xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/rest-api-3.xsd"
+          name="agi-ai" version="s1" require-csrf="false" require-authentication="false">
+
+    <resource name="component">
+        <resource name="list">
+            <method type="get"><service name="org.moqui.ai.ComponentServices.list#TargetComponents"/></method>
+        </resource>
+        <resource name="drop">
+            <method type="post"><service name="org.moqui.ai.ComponentServices.drop#Component"/></method>
+        </resource>
+    </resource>
+
+    <resource name="payload">
+        <method type="get"><service name="org.moqui.ai.pipeline.AgiPipelineServices.get#Payload"/></method>
+        <method type="post"><service name="org.moqui.ai.pipeline.AgiPipelineServices.process#Payload"/></method>
+        <resource name="detail">
+            <method type="get"><service name="org.moqui.ai.pipeline.AgiPipelineServices.get#Payload"/></method>
+        </resource>
+    </resource>
+
+    <resource name="discussions">
+        <method type="post"><service name="org.moqui.ai.pipeline.AgiPipelineServices.create#Discussion"/></method>
+        <resource name="pipeline-graph">
+            <method type="get"><service name="org.moqui.ai.pipeline.AgiPipelineServices.get#PipelineGraph"/></method>
+        </resource>
+        <resource name="title">
+            <method type="post"><service name="org.moqui.ai.pipeline.AgiPipelineServices.update#DiscussionTitle"/></method>
+        </resource>
+        <id name="discussionId">
+            <method type="delete"><service name="org.moqui.ai.pipeline.AgiPipelineServices.delete#Discussion"/></method>
+            <resource name="directives">
+                <method type="get"><service name="org.moqui.ai.pipeline.AgiPipelineServices.getOrEnsure#DiscussionDraftPayload"/></method>
+                <method type="post"><service name="org.moqui.ai.pipeline.AgiPipelineServices.save#DiscussionDirectives"/></method>
+                <resource name="pin">
+                    <method type="post"><service name="org.moqui.ai.pipeline.AgiPipelineServices.pin#TurnToDirectives"/></method>
+                </resource>
+            </resource>
+        </id>
+    </resource>
+
+    <resource name="pipeline">
+        <resource name="step">
+            <resource name="dispatch">
+                <method type="post"><service name="org.moqui.ai.pipeline.AgiPipelineServices.recordAndDispatch#PipelineStep"/></method>
+            </resource>
+            <resource name="fork">
+                <method type="post"><service name="org.moqui.ai.pipeline.AgiPipelineServices.fork#PipelineStep"/></method>
+            </resource>
+            <resource name="archive">
+                <method type="post"><service name="org.moqui.ai.pipeline.AgiPipelineServices.archive#PipelineBranch"/></method>
+            </resource>
+            <resource name="artifact">
+                <method type="post"><service name="org.moqui.ai.pipeline.AgiPipelineServices.update#PipelineStepArtifact"/></method>
+            </resource>
+            <resource name="promote">
+                <method type="post"><service name="org.moqui.ai.pipeline.AgiPipelineServices.promote#PipelineStepToDiscussion"/></method>
+            </resource>
+        </resource>
+        <resource name="orchestrate">
+            <method type="post"><service name="org.moqui.ai.pipeline.AgiPipelineServices.orchestrate#Module"/></method>
+        </resource>
+    </resource>
+</resource>
